@@ -23,6 +23,7 @@ const connectDb = () => {
       {
         useNewUrlParser: true,
         useUnifiedTopology: true,
+        useFindAndModify: false,
       },
     );
   }

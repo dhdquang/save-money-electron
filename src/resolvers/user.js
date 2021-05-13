@@ -1,8 +1,12 @@
 import jwt from 'jsonwebtoken';
 import { combineResolvers } from 'graphql-resolvers';
 import { AuthenticationError, UserInputError } from 'apollo-server';
+import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcrypt';
+import moment from 'moment';
 
 import { isAdmin, isAuthenticated } from './authorization';
+import Email from '../utils/email';
 
 const createToken = async (user, secret, expiresIn) => {
   const { id, email, username, role } = user;
@@ -35,9 +39,11 @@ export default {
         username,
         email,
         password,
+        isVerified: false,
+        verificationToken: await bcrypt.hash(uuidv4(), 10),
       });
-
-      return { token: createToken(user, secret, '30m') };
+      Email.sendVerifyEmail(email, user.verificationToken);
+      return { token: createToken(user, secret, '10m') };
     },
 
     signIn: async (
@@ -59,7 +65,7 @@ export default {
         throw new AuthenticationError('Invalid password.');
       }
 
-      return { token: createToken(user, secret, '30m') };
+      return { token: createToken(user, secret, '1h') };
     },
 
     updateUser: combineResolvers(
@@ -83,6 +89,62 @@ export default {
           return true;
         }
         return false;
+      },
+    ),
+
+    verifiedEmail: async (parent,
+      { verificationToken },
+      { models }) => {
+      const verified = await models.User.findOneAndUpdate(
+        { verificationToken },
+        {
+          isVerified: true,
+          verificationToken: '',
+        },
+      );
+      return Boolean(verified);
+    },
+
+    forgotPass: async (parent,
+      { email },
+      { models }) => {
+      const user = await models.User.findOneAndUpdate(
+        { email },
+        {
+          verificationToken: await bcrypt.hash(uuidv4(), 10),
+          resetPasswordExpires: moment().add(1, 'h'),
+        },
+      );
+      Email.sendForgotPassword(email, user.verificationToken);
+      return Boolean(user);
+    },
+
+    resetPassword: async (parent,
+      { token, password },
+      { models }) => {
+      const user = await models.User.findOneAndUpdate(
+        { verificationToken: token, resetPasswordExpires: { $gt: Date.now() } },
+        {
+          password,
+          verificationToken: '',
+          resetPasswordExpires: undefined,
+        },
+      );
+      return Boolean(user);
+    },
+
+    changePassword: combineResolvers(
+      isAuthenticated,
+      async (parent, { password, newPassword }, { models, me }) => {
+        const user = await models.User.findById(
+          me.id,
+        );
+        const isValid = await user.validatePassword(password);
+        if (!isValid) {
+          throw new AuthenticationError('Invalid password.');
+        }
+        const userNewPassword = await models.User.findByIdAndUpdate(me.id, { password: newPassword }, { new: true });
+        return { token: createToken(userNewPassword, process.env.SECRET, '1h') };
       },
     ),
   },

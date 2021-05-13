@@ -27,12 +27,17 @@ const userSchema = new mongoose.Schema({
   },
   firstname: {
     type: String,
-    required: true,
   },
   lastname: {
     type: String,
-    required: true,
   },
+  isVerified: {
+    type: Boolean,
+  },
+  verificationToken: {
+    type: String,
+  },
+  resetPasswordExpires: Date,
 });
 
 userSchema.statics.findByLogin = async function (login) {

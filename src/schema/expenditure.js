@@ -30,4 +30,10 @@ export default gql`
     edges: [Expenditure!]!
     pageInfo: PageInfo!
   }
+
+  type Insights{
+    expenditures: [Expenditure]
+    
+  }
+
 `;
