@@ -1,9 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { combineResolvers } from 'graphql-resolvers';
 import { AuthenticationError, UserInputError } from 'apollo-server';
-import { v4 as uuidv4 } from 'uuid';
-import bcrypt from 'bcrypt';
 import moment from 'moment';
+import generator from 'generate-password';
 
 import { isAdmin, isAuthenticated } from './authorization';
 import Email from '../utils/email';
@@ -40,7 +39,7 @@ export default {
         email,
         password,
         isVerified: false,
-        verificationToken: await bcrypt.hash(uuidv4(), 10),
+        verificationToken: Math.floor(100000 + Math.random() * 900000),
       });
       Email.sendVerifyEmail(email, user.verificationToken);
       return { token: createToken(user, secret, '10m') };
@@ -58,10 +57,14 @@ export default {
           'No user found with this login credentials.',
         );
       }
-
       const isValid = await user.validatePassword(password);
-
       if (!isValid) {
+        const forgotPass = await models.User.findOne(
+          { forgotToken: password, resetPasswordExpires: { $gt: Date.now() } },
+        );
+        if (forgotPass) {
+          return { token: createToken(user, secret, '1h'), srp: true };
+        }
         throw new AuthenticationError('Invalid password.');
       }
 
@@ -70,10 +73,10 @@ export default {
 
     updateUser: combineResolvers(
       isAuthenticated,
-      async (parent, { username }, { models, me }) => {
+      async (parent, { firstname, lastname }, { models, me }) => {
         const user = await models.User.findByIdAndUpdate(
           me.id,
-          { username },
+          { firstname, lastname },
           { new: true },
         ); return user;
       },
@@ -111,27 +114,38 @@ export default {
       const user = await models.User.findOneAndUpdate(
         { email },
         {
-          verificationToken: await bcrypt.hash(uuidv4(), 10),
+          forgotToken: generator.generate({
+            length: 10,
+            numbers: true,
+          }),
           resetPasswordExpires: moment().add(1, 'h'),
         },
+        { new: true },
       );
-      Email.sendForgotPassword(email, user.verificationToken);
+      Email.sendForgotPassword(email, user.forgotToken);
       return Boolean(user);
     },
 
-    resetPassword: async (parent,
-      { token, password },
-      { models }) => {
-      const user = await models.User.findOneAndUpdate(
-        { verificationToken: token, resetPasswordExpires: { $gt: Date.now() } },
-        {
+    resetPassword: combineResolvers(
+      isAuthenticated, async (parent,
+        { password },
+        { models, me }) => {
+        const user = await models.User.findById(
+          me.id,
+        );
+        if (!user.forgotToken) {
+          throw new AuthenticationError('Invalid password.');
+        }
+        const userNewPassword = await models.User.findByIdAndUpdate(me.id, {
           password,
-          verificationToken: '',
+          forgotToken: '',
           resetPasswordExpires: undefined,
         },
-      );
-      return Boolean(user);
-    },
+        { new: true });
+        userNewPassword.save();
+        return { token: createToken(userNewPassword, process.env.SECRET, '10m') };
+      },
+    ),
 
     changePassword: combineResolvers(
       isAuthenticated,
@@ -143,7 +157,10 @@ export default {
         if (!isValid) {
           throw new AuthenticationError('Invalid password.');
         }
-        const userNewPassword = await models.User.findByIdAndUpdate(me.id, { password: newPassword }, { new: true });
+        const userNewPassword = await models.User.findByIdAndUpdate(me.id,
+          { password: newPassword },
+          { new: true });
+        userNewPassword.save();
         return { token: createToken(userNewPassword, process.env.SECRET, '1h') };
       },
     ),

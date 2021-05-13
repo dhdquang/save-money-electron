@@ -15,13 +15,17 @@ export default gql`
     ): Token!
 
     signIn(login: String!, password: String!): Token!
-    updateUser(username: String!): User!
+    updateUser(firstname: String!, lastname: String!): User!
     deleteUser(id: ID!): Boolean!
     verifiedEmail(verificationToken: String!): Boolean!
+    changePassword(password: String!, newPassword: String): Token!
+    resetPassword(password: String!): Token!
+    forgotPass(email: String!): Boolean!
   }
 
   type Token {
     token: String!
+    srp: Boolean
   }
 
   type User {
@@ -29,6 +33,8 @@ export default gql`
     username: String!
     email: String!
     role: String
+    firstname: String
+    lastname: String
     messages: [Message!]
   }
 `;

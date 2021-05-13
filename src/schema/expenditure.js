@@ -12,7 +12,7 @@ export default gql`
   input ExpenditureInput {
     date: Date!
     title: String!
-    spending: Int!
+    spending: Float!
     detail: String
     category: ID!
   }
@@ -21,7 +21,7 @@ export default gql`
     id: ID!
     date: Date!
     title: String!
-    spending: Int!
+    spending: Float!
     detail: String
     category: Category
   }

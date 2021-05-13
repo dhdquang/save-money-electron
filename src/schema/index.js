@@ -4,6 +4,7 @@ import userSchema from './user';
 import messageSchema from './message';
 import categorySchema from './category';
 import expenditureSchema from './expenditure';
+import insightSchema from './insight';
 
 const linkSchema = gql`
   scalar Date
@@ -21,4 +22,4 @@ const linkSchema = gql`
   }
 `;
 
-export default [linkSchema, userSchema, messageSchema, categorySchema, expenditureSchema];
+export default [linkSchema, userSchema, messageSchema, categorySchema, expenditureSchema, insightSchema];
